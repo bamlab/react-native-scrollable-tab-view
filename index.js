@@ -1,13 +1,15 @@
 const React = require("react");
 const { PropTypes, Component } = React;
 const { ViewPropTypes } = (ReactNative = require("react-native"));
-const { Dimensions, View, Animated, ScrollView, StyleSheet, InteractionManager, Platform } = ReactNative;
+const { Dimensions, FlatList, View, Animated, ScrollView, StyleSheet, InteractionManager, Platform } = ReactNative;
 const TimerMixin = require("react-timer-mixin");
 
 const SceneComponent = require("./SceneComponent");
 const DefaultTabBar = require("./DefaultTabBar");
 const ScrollableTabBar = require("./ScrollableTabBar");
 const createReactClass = require("create-react-class");
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
 const ScrollableTabView = createReactClass({
   mixins: [TimerMixin],
@@ -99,7 +101,7 @@ const ScrollableTabView = createReactClass({
     if (this.props.renderTabBar === false) {
       return null;
     } else if (this.props.renderTabBar) {
-      return React.cloneElement(this.props.renderTabBar(props), props);
+      return React.cloneElement(this.props.renderTabBar(props), {...props, key: "tabbar"});
     } else {
       return <DefaultTabBar {...props} />;
     }
@@ -138,6 +140,7 @@ const ScrollableTabView = createReactClass({
     const scenes = this._composeScenes();
     return (
       <Animated.ScrollView
+        key="content"
         horizontal
         pagingEnabled
         automaticallyAdjustContentInsets={false}
@@ -248,14 +251,14 @@ const ScrollableTabView = createReactClass({
     }
 
     return React.cloneElement(this.props.collapsibleElement, {
+      key: "collapsible",
       onLayout: event => {
         this.collapsableBarHeight = event.nativeEvent.layout.height;
       }
     });
   },
 
-  render() {
-    let overlayTabs = this.props.tabBarPosition === "overlayTop" || this.props.tabBarPosition === "overlayBottom";
+  getTabBarProps(overlayTabs) {
     let tabBarProps = {
       goToPage: this.goToPage,
       tabs: this._children().map(child => child.props.tabLabel),
@@ -288,30 +291,47 @@ const ScrollableTabView = createReactClass({
         [this.props.tabBarPosition === "overlayTop" ? "top" : "bottom"]: 0
       };
     }
-    const ContainerView = this.props.collapsibleElement ? Animated.ScrollView : View;
 
-    return (
-      <ContainerView
-        style={[styles.container, this.props.style]}
-        onLayout={this._handleLayout}
-        ref={contentView => {
-          if (contentView) this.contentView = this.props.collapsibleElement ? contentView._component : contentView;
-        }}
-        onMomentumScrollEnd={event => {
-          this.contentScrollDistance = event.nativeEvent.contentOffset.y;
-        }}
-        stickyHeaderIndices={this.props.collapsibleElement ? [1] : []}
+    return tabBarProps;
+  },
+
+  getContainerChildren() {
+    const overlayTabs = this.props.tabBarPosition === 'overlayTop' || this.props.tabBarPosition === 'overlayBottom';
+    const tabBarProps = this.getTabBarProps(overlayTabs);
+    const children = [
+      this.renderCollapsableBar()
+    ];
+
+    if (this.props.tabBarPosition === 'top') children.push(this.renderTabBar(tabBarProps));
+    children.push(this.renderScrollableContent());
+    if (this.props.tabBarPosition === 'bottom' || overlayTabs) children.push(this.renderTabBar(tabBarProps));
+
+    return children;
+  },
+
+  renderFlatListItem({ item })  { return item; },
+
+  render() {
+    const children = this.getContainerChildren();
+    const containerProps = {
+      style: [styles.container, this.props.style, ],
+      onLayout: this._handleLayout,
+      ref: contentView => {this.contentView = contentView;},
+      onMomentumScrollEnd: event => {this.contentScrollDistance = event.nativeEvent.contentOffset.y;}
+    };
+
+    return this.props.collapsibleElement ? (
+      <AnimatedFlatList
+        {...containerProps}
+        stickyHeaderIndices={[1]}
         bounces={false}
+        data={children}
+        renderItem={this.renderFlatListItem}
         onScroll={this.props.onCollapse}
-        scrollEventThrottle={1}
-      >
-        {this.renderCollapsableBar()}
-        {this.props.tabBarPosition === "top" && this.renderTabBar(tabBarProps)}
-        {this.renderScrollableContent()}
-        {(this.props.tabBarPosition === "bottom" || overlayTabs) && this.renderTabBar(tabBarProps)}
-      </ContainerView>
-    );
-  }
+        scrollEventThrottle={1}>
+      </AnimatedFlatList>
+    ) : <View {...containerProps}>{ children }</View>;
+  },
 });
 
 module.exports = ScrollableTabView;

@@ -226,7 +226,7 @@ const ScrollableTabView = createReactClass({
     });
 
     if (this.contentScrollDistance >= this.collapsableBarHeight) {
-      this.contentView.scrollTo({ x: 0, y: this.collapsableBarHeight, animated: false });
+      this.contentView.getNode().scrollToOffset({ offset: this.collapsableBarHeight, animated: false });
     }
   },
 
